@@ -22,7 +22,9 @@ from .tokens import HyperlinkedRelatedTokenField, TokenSerializer, TokenValueFie
 
 class PaymentRouteNetworkSelectorField(serializers.HyperlinkedRelatedField):
     def get_queryset(self):
-        return PaymentNetwork.objects.filter(providers__is_active=True).select_subclasses()
+        return (
+            PaymentNetwork.objects.filter(providers__is_active=True).distinct().select_subclasses()
+        )
 
 
 class PaymentRouteSerializer(PolymorphicModelSerializer):

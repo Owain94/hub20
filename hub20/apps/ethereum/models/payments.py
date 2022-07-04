@@ -6,6 +6,7 @@ from django.contrib.postgres.fields.ranges import IntegerRangeField
 from django.db import models
 from django.db.models import F, Q
 from django.db.models.functions import Lower, Upper
+from web3.exceptions import BlockNotFound
 
 from hub20.apps.core.exceptions import RoutingError
 from hub20.apps.core.models import Payment, PaymentRoute, PaymentRouteQuerySet
@@ -91,31 +92,41 @@ class BlockchainPaymentRoute(PaymentRoute):
         return f"Blockchain Route {self.id} ('{self.identifier}' on blocks {self.payment_window})"
 
     def _process_native_token(self):
-        if self.provider is None:
-            logger.warning("No provider available")
-            return
-
         while self.is_open:
-            current_block = self.provider.w3.eth.block_number
-            if not (self.start_block_number < current_block <= self.expiration_block_number):
+            if not self.provider:
                 logger.warning(
-                    f"{self.chain.name} is at block {current_block}, outside of payment window"
+                    f"No provider available for {self.chain.name} to process route {self.id}"
                 )
                 return
-
-            self.chain.refresh_from_db()
-            processed_blocks = Block.objects.filter(
-                chain=self.chain, number__range=(self.start_block_number, current_block)
-            ).values_list("number", flat=True)
-
-            for block_number in range(self.start_block_number, current_block):
-                if block_number not in processed_blocks:
-                    logger.info(f"{self.description} checking #{block_number} on {self.chain}")
-                    block_data = self.provider.w3.eth.get_block(
-                        block_number, full_transactions=True
+            try:
+                current_block = self.provider.w3.eth.block_number
+                if not (self.start_block_number < current_block <= self.expiration_block_number):
+                    logger.warning(
+                        f"{self.chain.name} is at block {current_block}, outside of payment window"
                     )
-                    self.provider.extract_native_token_transfers(block_data)
-                    Block.make(block_data, chain_id=self.chain.id)
+                    return
+
+                self.chain.refresh_from_db()
+                processed_blocks = Block.objects.filter(
+                    chain=self.chain, number__range=(self.start_block_number, current_block)
+                ).values_list("number", flat=True)
+
+                for block_number in range(self.start_block_number, current_block):
+                    if block_number not in processed_blocks:
+                        logger.info(f"{self.description} checking #{block_number} on {self.chain}")
+                        try:
+                            block_data = self.provider.w3.eth.get_block(
+                                block_number, full_transactions=True
+                            )
+                            self.provider.extract_native_token_transfers(block_data)
+                            Block.make(block_data, chain_id=self.chain.id)
+                        except BlockNotFound:
+                            logger.warn(f"Block {block_number} is could not be queried")
+                        except Exception:
+                            logger.exception("Failed to get block data")
+            except AttributeError:
+                # We might have lost the provider
+                self.chain.refresh_from_db()
 
             time.sleep(1)
 
@@ -156,10 +167,13 @@ class BlockchainPaymentRoute(PaymentRoute):
             time.sleep(1)
 
     def process(self):
-        if self.deposit.currency.subclassed.is_ERC20:
-            self._process_erc20_token()
-        else:
-            self._process_native_token()
+        try:
+            if self.deposit.currency.subclassed.is_ERC20:
+                self._process_erc20_token()
+            else:
+                self._process_native_token()
+        except Exception:
+            logger.exception(f"Error when processing route {self.id}")
 
     @staticmethod
     def calculate_payment_window(chain: Chain):

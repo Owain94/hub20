@@ -17,7 +17,6 @@ from hub20.apps.core.models.tokens import TokenAmount
 from hub20.apps.core.tasks import broadcast_event
 from hub20.apps.ethereum.typing import Address
 
-from ..constants import Events
 from ..exceptions import RaidenConnectionError, RaidenPaymentError
 from .raiden import Channel, Payment, Raiden, TokenNetwork
 

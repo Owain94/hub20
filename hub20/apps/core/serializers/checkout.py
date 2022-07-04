@@ -8,7 +8,7 @@ from rest_framework_nested.serializers import NestedHyperlinkedModelSerializer
 from ..exceptions import RoutingError
 from ..models import Checkout, PaymentOrder, PaymentRoute, Store
 from .payments import PaymentOrderSerializer, PaymentRouteSerializer, PaymentSerializer
-from .tokens import HyperlinkedRelatedTokenField, HyperlinkedTokenSerializer, TokenValueField
+from .tokens import HyperlinkedRelatedTokenField, TokenValueField
 
 
 class StoreAcceptedTokenListSelectorField(serializers.HyperlinkedRelatedField):
@@ -49,7 +49,9 @@ class StoreEditorSerializer(StoreSerializer):
 
 
 class StoreViewerSerializer(StoreSerializer):
-    accepted_currencies = HyperlinkedTokenSerializer(many=True)
+    accepted_currencies = serializers.HyperlinkedRelatedField(
+        view_name="token-detail", many=True, read_only=True
+    )
 
     class Meta:
         model = Store
@@ -75,14 +77,14 @@ class CheckoutSerializer(serializers.ModelSerializer):
 
     def get_routes(self, obj):
         def get_route_serializer(route):
-            serializer_class = PaymentRouteSerializer.get_serializer_class(route)
+            serializer_class = PaymentRouteSerializer.get_subclassed_serializer(route)
             return serializer_class(route, context=self.context)
 
         return [get_route_serializer(route).data for route in obj.order.routes.select_subclasses()]
 
     def get_payments(self, obj):
         def get_payment_serializer(payment):
-            serializer_class = PaymentSerializer.get_serializer_class(payment)
+            serializer_class = PaymentSerializer.get_subclassed_serializer(payment)
             return serializer_class(payment, context=self.context)
 
         return [get_payment_serializer(payment).data for payment in obj.order.payments]
@@ -91,7 +93,7 @@ class CheckoutSerializer(serializers.ModelSerializer):
         order = data["invoice"]
         store = data["store"]
         currency = order["currency"]
-        if currency not in store.accepted_currencies.all():
+        if currency.id not in store.accepted_currencies.values_list("id", flat=True):
             raise serializers.ValidationError(f"{currency.name} is not accepted at {store.name}")
 
         return data
