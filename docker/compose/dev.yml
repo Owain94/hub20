@@ -1,0 +1,114 @@
+x-network: &hub20_dev_network
+  networks:
+    dev:
+
+
+x-app-volume: &hub20_dev_volume
+  volumes:
+    - "${HUB20_APP_MOUNT_PATH:-../../../backend}:/app"
+
+x-development: &hub20_dev_service
+  build:
+    target: hub20_dev
+
+  environment:
+    DJANGO_SETTINGS_MODULE: hub20.api.settings
+    HUB20_DATA_FOLDER: /var/hub20
+    HUB20_STATIC_ROOT: /var/hub20/static
+    HUB20_BROKER_URL: "amqp://${HUB20_BROKER_USER:-hub20}:${HUB20_BROKER_PASSWORD:-hub20_pass}@rabbitmq:5672${HUB20_RABBITMQ_VHOST:-/}"
+    HUB20_CACHE_BACKEND: django_redis.cache.RedisCache
+    HUB20_CACHE_LOCATION: redis://redis:6379/1
+    HUB20_CHANNEL_LAYER_HOST: redis
+    HUB20_CORS_HEADERS_ENABLED: 1
+    HUB20_DATABASE_HOST: db
+    HUB20_DATABASE_PORT: 5432
+    HUB20_DATABASE_NAME: hub20
+    HUB20_DATABASE_USER: hub20
+    HUB20_DATABASE_PASSWORD: hub20_pass
+    HUB20_EMAIL_MAILER_ADDRESS: noreply@hub20.example.com
+    HUB20_EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+    HUB20_SECRET_KEY: base-hub20-secret-key
+    HUB20_RAIDEN_SERVERS: http://raiden:5001
+    HUB20_DEBUG: 1
+    HUB20_SERVE_OPENAPI_URLS: 1
+
+services:
+  redis:
+    <<: *hub20_dev_network
+    #mem_limit: 2000M
+    volumes:
+      - "${HUB20_REDIS_MOUNT_PATH:-./docker/volumes/redis/hub20}:/data"
+
+  rabbitmq:
+    <<: *hub20_dev_network
+    volumes:
+      - "${HUB20_RABBITMQ_MOUNT_PATH:-./docker/volumes/rabbitmq/hub20}:/bitnami"
+
+    networks:
+      dev:
+        ipv4_address: 10.0.20.97
+
+  db:
+    <<: *hub20_dev_network
+    volumes:
+      - "${HUB20_DATABASE_MOUNT_PATH:-./docker/volumes/database/hub20}:/var/lib/postgresql/data"
+
+  # Admin backend
+  admin:
+    <<: *hub20_dev_network
+    <<: *hub20_dev_service
+    stdin_open: true
+    tty: true
+    volumes:
+      - "${HUB20_APP_MOUNT_PATH:-./}:/app"
+      - "${HUB20_MEDIA_MOUNT_PATH:-./docker/volumes/media/hub20/static}:/var/hub20/static"
+
+    command: uvicorn hub20.api.asgi:application --port 80 --host 0.0.0.0 --reload --reload-dir /app/hub20
+
+    networks:
+      dev:
+        ipv4_address: 10.0.20.98
+
+  # Web API
+  web:
+    <<: *hub20_dev_network
+    <<: *hub20_dev_service
+    stdin_open: true
+    tty: true
+    volumes:
+      - "${HUB20_APP_MOUNT_PATH:-./}:/app"
+      - "${HUB20_MEDIA_MOUNT_PATH:-./docker/volumes/media/hub20/static}:/var/hub20/static"
+    command: uvicorn hub20.api.asgi:application --port 80 --host 0.0.0.0 --reload --reload-dir /app/hub20
+    networks:
+      dev:
+        ipv4_address: 10.0.20.99
+
+  run_payment_providers:
+    <<: *hub20_dev_network
+    <<: *hub20_dev_service
+    <<: *hub20_dev_volume
+
+  run_payment_processors:
+    <<: *hub20_dev_network
+    <<: *hub20_dev_service
+    <<: *hub20_dev_volume
+
+  # Celery app
+  celery:
+    <<: *hub20_dev_network
+    <<: *hub20_dev_service
+    <<: *hub20_dev_volume
+
+  # Celery beat (periodic tasks)
+  celery_beat:
+    <<: *hub20_dev_network
+    <<: *hub20_dev_service
+    <<: *hub20_dev_volume
+
+networks:
+  dev:
+    name: hub20_development
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.20.0/24
