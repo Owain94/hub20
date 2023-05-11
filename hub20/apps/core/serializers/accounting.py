@@ -12,16 +12,6 @@ from ..models import (
 from .tokens import TokenSerializer, TokenValueField
 
 
-class HyperlinkedBalanceIdentityField(serializers.HyperlinkedIdentityField):
-    def __init__(self, *args, **kw):
-        kw.setdefault("view_name", "balance-detail")
-        super().__init__(*args, **kw)
-
-    def get_url(self, obj, view_name, request, format):
-        url_kwargs = {"chain_id": obj.chain_id, "address": obj.address}
-        return reverse(view_name, kwargs=url_kwargs, request=request, format=format)
-
-
 class TokenBalanceSerializer(TokenSerializer):
     token = serializers.HyperlinkedIdentityField(view_name="token-detail")
     amount = TokenValueField(read_only=True, source="balance")

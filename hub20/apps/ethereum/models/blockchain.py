@@ -7,6 +7,7 @@ from django.contrib.postgres.fields import ArrayField, HStoreField
 from django.db import models
 from django.db.models import Max
 from django.utils import timezone
+from hexbytes import HexBytes
 from model_utils.managers import QueryManager
 from web3 import Web3
 from web3.datastructures import AttributeDict
@@ -139,7 +140,7 @@ class TransactionDataRecord(AbstractTransactionRecord):
     data = HStoreField()
 
     @classmethod
-    def make(cls, chain_id: int, tx_data: TxData, force=False):
+    def make(cls, chain_id: int, tx_hash: HexBytes, tx_data: TxData, force=False):
         action = cls.objects.update_or_create if force else cls.objects.get_or_create
         data, _ = action(
             chain_id=chain_id,

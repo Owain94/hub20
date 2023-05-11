@@ -237,7 +237,9 @@ class Web3Provider(PaymentNetworkProvider):
                 return
 
             try:
-                TransactionDataRecord.make(chain_id=token.chain_id, tx_data=tx_data)
+                TransactionDataRecord.make(
+                    chain_id=token.chain_id, tx_hash=event_data.transactionHash, tx_data=tx_data
+                )
                 tx = Transaction.make(
                     chain_id=token.chain_id,
                     block_data=block_data,
@@ -589,10 +591,12 @@ class Web3Provider(PaymentNetworkProvider):
         tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
         try:
             tx_data = self.w3.eth.get_transaction(tx_hash)
-            return TransactionDataRecord.make(chain_id=chain_id, tx_data=tx_data, force=True)
+            return TransactionDataRecord.make(
+                chain_id=chain_id, tx_hash=tx_hash, tx_data=tx_data, force=True
+            )
         except TransactionNotFound:
             return TransactionDataRecord.make(
-                chain_id=chain_id, tx_data=AttributeDict(transaction_params)
+                chain_id=chain_id, tx_hash=tx_hash, tx_data=AttributeDict(transaction_params)
             )
 
     def sign_transaction(self, account: EthereumAccount_T, transaction_data, *args, **kw):

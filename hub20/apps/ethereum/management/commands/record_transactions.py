@@ -38,7 +38,7 @@ class Command(BaseCommand):
                 tx_data = w3.eth.get_transaction(tx_hash)
                 tx_receipt = w3.eth.get_transaction_receipt(tx_hash)
                 block_data = w3.eth.get_block(tx_data.blockHash)
-                TransactionDataRecord.make(chain_id=chain_id, tx_data=tx_data)
+                TransactionDataRecord.make(chain_id=chain_id, tx_hash=tx_hash, tx_data=tx_data)
                 Transaction.make(
                     chain_id=chain_id,
                     block_data=block_data,
