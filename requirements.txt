@@ -210,7 +210,7 @@ eth-rlp==0.3.0
     # via eth-account
 eth-tester[py-evm]==v0.6.0-beta.5
     # via web3
-eth-typing==3.0.0
+eth-typing==3.2.0
     # via
     #   eth-abi
     #   eth-keys
